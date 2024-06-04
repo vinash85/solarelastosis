@@ -15,9 +15,14 @@ Docker usage:
 Container to be released on docker hub soon
 
 ## Folder Structure in docker
-home/tailab
+/home/tailab
+
            |
+
             solarelastosis -- code
+
            |               |__docker
+            
             Data -- gem_blgm
+                   
                    |__gem_results      
