@@ -126,7 +126,9 @@ def train(datasets, cur, args):
     print('\nInit Model...', end=' ')
     model_dict = {"dropout": args.drop_out, 
                   'n_classes': args.n_classes, 
-                  "embed_dim": args.embed_dim}
+                  "embed_dim": args.embed_dim,
+                  'modality' : args.modality,
+                  'clinical_dim' : args.clinical_dim}
     
     if args.model_size is not None and args.model_type != 'mil':
         model_dict.update({"size_arg": args.model_size})

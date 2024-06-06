@@ -76,7 +76,7 @@ args:
 """
 class CLAM_SB(nn.Module):
     def __init__(self, gate = True, size_arg = "small", dropout = 0., k_sample=8, n_classes=2,
-        instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=1024):
+        instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=1024,modality="unimodal",clinical_dim=59):
         super().__init__()
         self.size_dict = {"small": [embed_dim, 512, 256], "big": [embed_dim, 512, 384]}
         size = self.size_dict[size_arg]
@@ -87,13 +87,19 @@ class CLAM_SB(nn.Module):
             attention_net = Attn_Net(L = size[1], D = size[2], dropout = dropout, n_classes = 1)
         fc.append(attention_net)
         self.attention_net = nn.Sequential(*fc)
-        self.classifiers = nn.Linear(size[1], n_classes)
+        if modality == "multimodal":
+            self.classifiers = nn.Linear(size[1]+clinical_dim, n_classes)
+        elif modality == "unimodal":
+            self.classifiers = nn.Linear(size[1], n_classes)
+        
         instance_classifiers = [nn.Linear(size[1], 2) for i in range(n_classes)]
         self.instance_classifiers = nn.ModuleList(instance_classifiers)
         self.k_sample = k_sample
         self.instance_loss_fn = instance_loss_fn
         self.n_classes = n_classes
         self.subtyping = subtyping
+        self.modality = modality
+        self.embed_dim = embed_dim
     
     @staticmethod
     def create_positive_targets(length, device):
@@ -136,6 +142,9 @@ class CLAM_SB(nn.Module):
         return instance_loss, p_preds, p_targets
 
     def forward(self, h, label=None, instance_eval=False, return_features=False, attention_only=False):
+        if self.modality == "multimodal":
+            h , c = torch.split(h,self.embed_dim,dim=1)
+            c = c[0].reshape([1,c[0].shape[0]])
         A, h = self.attention_net(h)  # NxK        
         A = torch.transpose(A, 1, 0)  # KxN
         if attention_only:
@@ -167,7 +176,10 @@ class CLAM_SB(nn.Module):
             if self.subtyping:
                 total_inst_loss /= len(self.instance_classifiers)
                 
-        M = torch.mm(A, h) 
+        M = torch.mm(A, h)
+        if self.modality =="multimodal":
+            M = torch.cat((M,c),1)
+
         logits = self.classifiers(M)
         Y_hat = torch.topk(logits, 1, dim = 1)[1]
         Y_prob = F.softmax(logits, dim = 1)
@@ -179,6 +191,7 @@ class CLAM_SB(nn.Module):
         if return_features:
             results_dict.update({'features': M})
         return logits, Y_prob, Y_hat, A_raw, results_dict
+
 
 class CLAM_MB(CLAM_SB):
     def __init__(self, gate = True, size_arg = "small", dropout = 0., k_sample=8, n_classes=2,
