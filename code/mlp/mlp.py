@@ -1,5 +1,6 @@
 # Train on MNIST
 import csv
+from sklearn.metrics import roc_auc_score
 import torch.nn as nn
 import torch.optim as optim
 import torch
@@ -8,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import pandas as pd
 import torchvision.transforms as transforms
 from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 
 feature_names = ''
 class CSVDataset(Dataset):
@@ -61,16 +63,21 @@ class MLP(nn.Module):
         return self.layers(x)
 
 # Define loss
-criterion = nn.CrossEntropyLoss()
+criterion = nn.BCELoss()
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 import shap
+from collections import Counter
 from sklearn.model_selection import train_test_split
 
 ## Define the KFold cross-validator
 kf = KFold(n_splits=10, shuffle=True, random_state=42)
+from sklearn.model_selection import StratifiedKFold
+labels = [sample[1] for sample in dataset]
+# Define the StratifiedKFold cross-validator
+skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
 # Define the model path
 
@@ -80,21 +87,21 @@ best_val_acc = 0.0
 
 
 # best_model_path = "best_model.pth"
-best_model_path = "best_mlp_v2.pth"
+best_model_path = "best_mlp_two_classes.pth"
 
 def predict(data):
     return model(data).detach().cpu().numpy()
+best_val_loss = float('inf')
 
-
-for fold, (train_val_idx, test_idx) in enumerate(kf.split(dataset)):
+for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
     # Further split the train_val set into train and validation sets
     # Ensuring approximately 90% for train and 10% for validation of the train_val set
     train_idx, val_idx = train_test_split(train_val_idx, test_size=0.11, random_state=42)  # 0.11 of 90% is about 10% of the whole
     # Define model
-    model = MLP(60, [16], 3)
+    model = MLP(60, [16], 1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to('cpu')
+    model.to(device)
     counter = 0
     # Define optimizer
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -110,6 +117,7 @@ for fold, (train_val_idx, test_idx) in enumerate(kf.split(dataset)):
     # Prepare to log metrics
     train_losses, val_losses, test_losses = [], [], []
     train_accuracies, val_accuracies, test_accuracies = [], [], []
+    test_aucs = []
     #model.load_state_dict(torch.load("best_mlp_v2.pth"))
     #model.eval()
 
@@ -140,9 +148,10 @@ for fold, (train_val_idx, test_idx) in enumerate(kf.split(dataset)):
         epoch_loss, epoch_accuracy = 0, 0
         with tqdm(trainloader, desc=f"Fold {fold+1} Epoch {epoch+1}") as pbar:
             for features, labels in pbar:
-                features, labels = features.to(device), labels.to(device)
+                labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype = torch.float32)
                 optimizer.zero_grad()
-                output = model(features)
+                output = torch.sigmoid(model(features))
                 loss = criterion(output, labels)
                 loss.backward()
                 optimizer.step()
@@ -160,8 +169,9 @@ for fold, (train_val_idx, test_idx) in enumerate(kf.split(dataset)):
         val_loss, val_accuracy = 0, 0
         with torch.no_grad():
             for features, labels in valloader:
-                features, labels = features.to(device), labels.to(device)
-                output = model(features)
+                labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype=torch.float32)
+                output = torch.sigmoid(model(features))
                 val_loss += criterion(output, labels).item()
                 val_accuracy += (output.argmax(dim=1) == labels).float().mean().item()
 
@@ -170,34 +180,44 @@ for fold, (train_val_idx, test_idx) in enumerate(kf.split(dataset)):
         val_losses.append(val_loss)
         val_accuracies.append(val_accuracy)
         # test
-        test_loss, test_accuracy = 0, 0
+        test_loss, test_accuracy, test_auc = 0, 0, 0
+        output_all, labels_all = [], []
         with torch.no_grad():
             for features, labels in testloader:
-                features, labels = features.to(device), labels.to(device)
-                output = model(features)
+                labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype=torch.float32)
+                output = torch.sigmoid(model(features))
                 test_loss += criterion(output, labels).item()
                 test_accuracy += (output.argmax(dim=1) == labels).float().mean().item()
-
+                output_all.append(output.cpu().numpy().flatten().tolist())
+                labels_all.append(labels.cpu().numpy().flatten().tolist())
+            labels_all = labels_all[0]
+            output_all = output_all[0]
+            label_counter = Counter(labels_all)
+            print("Label distribution in test set:", label_counter)
+            test_auc = roc_auc_score(labels_all, output_all)
         test_loss /= len(testloader)
         test_accuracy /= len(testloader)
         test_losses.append(test_loss)
         test_accuracies.append(test_accuracy)
+        test_aucs.append(test_auc)
         # Log epoch results
         print(f"Epoch {epoch+1}, Train Loss: {train_losses[-1]}, Train Accuracy: {train_accuracies[-1]}")
         print(f"Epoch {epoch+1}, Val Loss: {val_loss}, Val Accuracy: {val_accuracy}")
-        print(f"Epoch {epoch+1}, Test Loss: {test_loss}, Test Accuracy: {test_accuracy}")
+        print(f"Epoch {epoch+1}, Test Loss: {test_loss}, Test Accuracy: {test_accuracy} Test AUC: {test_auc}")
         # Early stopping and learning rate scheduler
         scheduler.step(val_loss)
-        if val_accuracy > best_val_acc:
+        if best_val_loss > val_loss:
             print("Saving new best model")
             best_val_loss = val_loss
             torch.save(model.state_dict(), best_model_path)
             best_val_acc = val_accuracy
             best_test_acc = test_accuracy
+            best_test_auc = test_auc
     with open('training_metrics.csv', 'a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Fold', 'Val Accuracy', 'Test Accuracy'])
-        writer.writerow([fold, max(val_accuracies), max(test_accuracies)])
+        writer.writerow(['Fold', 'Test Accuracy', 'Test AUC'])
+        writer.writerow([fold, max(test_accuracies),max(test_aucs)])
         #     counter = 0
         # else:
         #     counter += 1

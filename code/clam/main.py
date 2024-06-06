@@ -69,6 +69,7 @@ parser = argparse.ArgumentParser(description='Configurations for WSI Training')
 parser.add_argument('--data_root_dir', type=str, default=None, 
                     help='data directory')
 parser.add_argument('--embed_dim', type=int, default=1024)
+parser.add_argument('--clinical_dim', type=int, default=59)
 parser.add_argument('--max_epochs', type=int, default=200,
                     help='maximum number of epochs to train (default: 200)')
 parser.add_argument('--lr', type=float, default=1e-4,
@@ -109,6 +110,7 @@ parser.add_argument('--subtyping', action='store_true', default=False,
 parser.add_argument('--bag_weight', type=float, default=0.7,
                     help='clam: weight coefficient for bag-level loss (default: 0.7)')
 parser.add_argument('--B', type=int, default=8, help='numbr of positive/negative patches to sample for clam')
+parser.add_argument('--modality', type=str, default='unimodal', choices=['unimodal', 'multimodal'])
 args = parser.parse_args()
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -143,7 +145,8 @@ settings = {'num_splits': args.k,
             'model_size': args.model_size,
             "use_drop_out": args.drop_out,
             'weighted_sample': args.weighted_sample,
-            'opt': args.opt}
+            'opt': args.opt,
+            'modality' : args.modality}
 
 if args.model_type in ['clam_sb', 'clam_mb']:
    settings.update({'bag_weight': args.bag_weight,
