@@ -1,4 +1,3 @@
-# Train on MNIST
 import csv
 from sklearn.metrics import roc_auc_score
 import torch.nn as nn
@@ -30,11 +29,9 @@ class CSVDataset(Dataset):
         scales = MinMaxScaler(feature_range=(0, 1))
         self.features = (torch.tensor(
             scales.fit_transform(final_data.values)).float())
-        # 创造一个映射从FeatureX到实际的列名
         global feature_names
         feature_names = final_data.columns
-
-        # 假设shap_values_df是你的一个DataFrame，其中包含SHAP值，列名为Feat0 
+ 
         self.labels = torch.tensor(
             self.data['Deepest Lesion (Recent & Previous) SOLAREL'].values).long()-1
 
@@ -47,7 +44,6 @@ class CSVDataset(Dataset):
 
 # Example usage
 dataset = CSVDataset(r'Gem_processed_new_two_classes.csv')
-dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
 
 class MLP(nn.Module):
     def __init__(self, input_size, hidden_sizes, output_size):
@@ -63,7 +59,7 @@ class MLP(nn.Module):
         return self.layers(x)
 
 # Define loss
-criterion = nn.BCELoss()
+criterion = nn.CrossEntropyLoss()
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import KFold
@@ -87,18 +83,22 @@ best_val_acc = 0.0
 
 
 # best_model_path = "best_model.pth"
-best_model_path = "best_mlp_two_classes.pth"
+# best_model_path = f"best_mlp_{n_classes}_classes.pth"
 
 def predict(data):
     return model(data).detach().cpu().numpy()
 best_val_loss = float('inf')
+# classifaction catogories
+n_classes = 2
+total_epoch = 40000
+best_model_path = f"best_mlp_{n_classes}_classes.pth"
 
 for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
     # Further split the train_val set into train and validation sets
     # Ensuring approximately 90% for train and 10% for validation of the train_val set
     train_idx, val_idx = train_test_split(train_val_idx, test_size=0.11, random_state=42)  # 0.11 of 90% is about 10% of the whole
     # Define model
-    model = MLP(60, [16], 1)
+    model = MLP(60, [16], n_classes)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -120,8 +120,6 @@ for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
     test_aucs = []
     #model.load_state_dict(torch.load("best_mlp_v2.pth"))
     #model.eval()
-
-    # 提取所有测试数据
     #X_test = torch.cat([data for data, _ in testloader], 0)
     #y_test = torch.cat([target for _, target in testloader], 0)
 
@@ -142,16 +140,16 @@ for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
     #plt.savefig('summary_plot.svg', format='svg')  # 保存为SVG格式
     # break
 
-    for epoch in range(4000):
+    for epoch in range(total_epoch):
         # Train
         model.train()
         epoch_loss, epoch_accuracy = 0, 0
         with tqdm(trainloader, desc=f"Fold {fold+1} Epoch {epoch+1}") as pbar:
             for features, labels in pbar:
-                labels = labels.reshape([labels.shape[0],1])
-                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype = torch.float32)
+                # labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype = torch.long)
                 optimizer.zero_grad()
-                output = torch.sigmoid(model(features))
+                output = torch.softmax(model(features), dim=1)
                 loss = criterion(output, labels)
                 loss.backward()
                 optimizer.step()
@@ -169,9 +167,9 @@ for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
         val_loss, val_accuracy = 0, 0
         with torch.no_grad():
             for features, labels in valloader:
-                labels = labels.reshape([labels.shape[0],1])
-                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype=torch.float32)
-                output = torch.sigmoid(model(features))
+                # labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device, dtype=torch.long)
+                output = torch.softmax(model(features), dim=1)
                 val_loss += criterion(output, labels).item()
                 val_accuracy += (output.argmax(dim=1) == labels).float().mean().item()
 
@@ -184,17 +182,15 @@ for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
         output_all, labels_all = [], []
         with torch.no_grad():
             for features, labels in testloader:
-                labels = labels.reshape([labels.shape[0],1])
-                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype=torch.float32)
-                output = torch.sigmoid(model(features))
+                # labels = labels.reshape([labels.shape[0],1])
+                features, labels = features.to(device,dtype=torch.float32), labels.to(device,dtype=torch.long)
+                output = torch.softmax(model(features), dim=1)
                 test_loss += criterion(output, labels).item()
                 test_accuracy += (output.argmax(dim=1) == labels).float().mean().item()
                 output_all.append(output.cpu().numpy().flatten().tolist())
-                labels_all.append(labels.cpu().numpy().flatten().tolist())
+                labels_all.append(nn.functional.one_hot(labels, n_classes).cpu().numpy().flatten().tolist())
             labels_all = labels_all[0]
             output_all = output_all[0]
-            label_counter = Counter(labels_all)
-            print("Label distribution in test set:", label_counter)
             test_auc = roc_auc_score(labels_all, output_all)
         test_loss /= len(testloader)
         test_accuracy /= len(testloader)
@@ -214,7 +210,7 @@ for fold, (train_val_idx, test_idx) in enumerate(skf.split(dataset, labels)):
             best_val_acc = val_accuracy
             best_test_acc = test_accuracy
             best_test_auc = test_auc
-    with open('training_metrics.csv', 'a', newline='') as file:
+    with open(f'training_metrics_{n_classes}_classes.csv', 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Fold', 'Test Accuracy', 'Test AUC'])
         writer.writerow([fold, max(test_accuracies),max(test_aucs)])
