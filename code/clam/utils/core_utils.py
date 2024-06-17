@@ -3,7 +3,7 @@ import torch
 from utils.utils import *
 import os
 from dataset_modules.dataset_generic import save_splits
-from models.model_mil import MIL_fc, MIL_fc_mc
+from models.model_mil import MIL_fc, MIL_fc_mc, MLP
 from models.model_clam import CLAM_MB, CLAM_SB
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_auc_score, roc_curve
@@ -155,11 +155,13 @@ def train(datasets, cur, args):
         else:
             raise NotImplementedError
     
-    else: # args.model_type == 'mil'
+    elif args.model_type == 'mil': 
         if args.n_classes > 2:
             model = MIL_fc_mc(**model_dict)
         else:
             model = MIL_fc(**model_dict)
+    else: # args.model_type == 'mlp'
+        model = MLP(**model_dict)
     
     _ = model.to(device)
     print('Done!')
