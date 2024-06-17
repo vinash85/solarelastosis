@@ -23,4 +23,5 @@ future
 h5py
 huggingface
 timm
+seaborn
 #pyimagej
