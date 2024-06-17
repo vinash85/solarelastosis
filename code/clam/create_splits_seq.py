@@ -17,12 +17,13 @@ parser.add_argument('--val_frac', type=float, default= 0.1,
                     help='fraction of labels for validation (default: 0.1)')
 parser.add_argument('--test_frac', type=float, default= 0.1,
                     help='fraction of labels for test (default: 0.1)')
-
+parser.add_argument('--csv_path', type=str, default=None,help='path to csv file')
+parser.add_argument('--splits_dir', type=str, default=None,help='path to save splits')
 args = parser.parse_args()
 
 if args.task == 'task_1_tumor_vs_normal':
     args.n_classes=2
-    dataset = Generic_WSI_Classification_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+    dataset = Generic_WSI_Classification_Dataset(csv_path = args.csv_path,
                             shuffle = False, 
                             seed = args.seed, 
                             print_info = True,
@@ -32,7 +33,7 @@ if args.task == 'task_1_tumor_vs_normal':
 
 elif args.task == 'task_2_tumor_subtyping':
     args.n_classes=3
-    dataset = Generic_WSI_Classification_Dataset(csv_path = 'dataset_csv/tumor_subtyping_dummy_clean.csv',
+    dataset = Generic_WSI_Classification_Dataset(csv_path = args.csv_path,
                             shuffle = False, 
                             seed = args.seed, 
                             print_info = True,
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         label_fracs = [0.1, 0.25, 0.5, 0.75, 1.0]
     
     for lf in label_fracs:
-        split_dir = 'splits/'+ str(args.task) + '_{}'.format(int(lf * 100))
+        split_dir = args.splits_dir+ str(args.task) + '_{}'.format(int(lf * 100))
         os.makedirs(split_dir, exist_ok=True)
         dataset.create_splits(k = args.k, val_num = val_num, test_num = test_num, label_frac=lf)
         for i in range(args.k):

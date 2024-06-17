@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import numpy as np
-
+import shap
 import argparse
 import torch
 import torch.nn as nn
@@ -12,6 +12,7 @@ from utils.utils import *
 from math import floor
 import matplotlib.pyplot as plt
 from dataset_modules.dataset_generic import Generic_WSI_Classification_Dataset, Generic_MIL_Dataset, save_splits
+from models.model_mil import MLP
 import h5py
 from utils.eval_utils import *
 
@@ -30,7 +31,7 @@ parser.add_argument('--splits_dir', type=str, default=None,
                     help='splits directory, if using custom splits other than what matches the task (default: None)')
 parser.add_argument('--model_size', type=str, choices=['small', 'big'], default='small', 
                     help='size of model (default: small)')
-parser.add_argument('--model_type', type=str, choices=['clam_sb', 'clam_mb', 'mil'], default='clam_sb', 
+parser.add_argument('--model_type', type=str, choices=['clam_sb', 'clam_mb', 'mil','mlp'], default='clam_sb', 
                     help='type of model (default: clam_sb)')
 parser.add_argument('--k', type=int, default=10, help='number of folds (default: 10)')
 parser.add_argument('--k_start', type=int, default=-1, help='start fold (default: -1, last fold)')
@@ -42,6 +43,10 @@ parser.add_argument('--split', type=str, choices=['train', 'val', 'test', 'all']
 parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal',  'task_2_tumor_subtyping'])
 parser.add_argument('--drop_out', type=float, default=0.25, help='dropout')
 parser.add_argument('--embed_dim', type=int, default=1090)
+parser.add_argument('--mode', type=str,choices=['eval','predict','shapley'] ,default='shapley', help='mode of evaluation')
+parser.add_argument('--positive_csv_path', type=str, help='csv path for positive class like marked for solar elastosis',default='dataset_csv/tumor_vs_normal_dummy_clean.csv')
+parser.add_argument('--negative_csv_path', type=str, help='csv path for positive class like mild for solar elastosis',default='dataset_csv/tumor_vs_normal_dummy_clean.csv')                         
+parser.add_argument('--return_probs', type=str, help='model to return only softmax output',choices=['yes','no'],default='no')
 args = parser.parse_args()
 
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -71,14 +76,25 @@ f.close()
 
 print(settings)
 if args.task == 'task_1_tumor_vs_normal':
-    args.n_classes=2
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
-                            data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
-                            shuffle = False, 
-                            print_info = True,
-                            label_dict = {'normal_tissue':0, 'tumor_tissue':1},
-                            patient_strat=False,
-                            ignore=[])
+    if args.mode == 'shapley':
+        args.n_classes=2
+        dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+                                data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
+                                shuffle = False, 
+                                print_info = True,
+                                label_dict = {'normal_tissue':0, 'tumor_tissue':1},
+                                patient_strat=False,
+                                ignore=[])
+    else:
+        args.n_classes=2
+        dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+                                      data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
+                                      shuffle = False, 
+                                      print_info = True,
+                                      label_dict = {'normal_tissue':0, 'tumor_tissue':1},
+                                      patient_strat=False,
+                                      ignore=[])
+        print(len(dataset))
 
 elif args.task == 'task_2_tumor_subtyping':
     args.n_classes=3
@@ -120,25 +136,36 @@ ckpt_paths = [os.path.join(args.models_dir, 's_{}_checkpoint.pt'.format(fold)) f
 datasets_id = {'train': 0, 'val': 1, 'test': 2, 'all': -1}
 
 if __name__ == "__main__":
-    all_results = []
-    all_auc = []
-    all_acc = []
-    for ckpt_idx in range(len(ckpt_paths)):
-        if datasets_id[args.split] < 0:
-            split_dataset = dataset
-        else:
-            csv_path = '{}/splits_{}.csv'.format(args.splits_dir, folds[ckpt_idx])
-            datasets = dataset.return_splits(from_id=False, csv_path=csv_path)
-            split_dataset = datasets[datasets_id[args.split]]
-        model, patient_results, test_error, auc, df  = eval(split_dataset, args, ckpt_paths[ckpt_idx])
-        all_results.append(all_results)
-        all_auc.append(auc)
-        all_acc.append(1-test_error)
-        df.to_csv(os.path.join(args.save_dir, 'fold_{}.csv'.format(folds[ckpt_idx])), index=False)
+    if args.mode =="eval":
+        all_results = []
+        all_auc = []
+        all_acc = []
+        for ckpt_idx in range(len(ckpt_paths)):
+            if datasets_id[args.split] < 0:
+                split_dataset = dataset
+            else:
+                csv_path = '{}/splits_{}.csv'.format(args.splits_dir, folds[ckpt_idx])
+                datasets = dataset.return_splits(from_id=False, csv_path=csv_path)
+                split_dataset = datasets[datasets_id[args.split]]
+            model, patient_results, test_error, auc, df  = eval(split_dataset, args, ckpt_paths[ckpt_idx])
+            all_results.append(all_results)
+            all_auc.append(auc)
+            all_acc.append(1-test_error)
+            df.to_csv(os.path.join(args.save_dir, 'fold_{}.csv'.format(folds[ckpt_idx])), index=False)
 
-    final_df = pd.DataFrame({'folds': folds, 'test_auc': all_auc, 'test_acc': all_acc})
-    if len(folds) != args.k:
-        save_name = 'summary_partial_{}_{}.csv'.format(folds[0], folds[-1])
+        final_df = pd.DataFrame({'folds': folds, 'test_auc': all_auc, 'test_acc': all_acc})
+        if len(folds) != args.k:
+            save_name = 'summary_partial_{}_{}.csv'.format(folds[0], folds[-1])
+        else:
+            save_name = 'summary.csv'
+        final_df.to_csv(os.path.join(args.save_dir, save_name))
+    elif args.mode =="predict":
+        for ckpt_idx in range(len(ckpt_paths)):
+            split_dataset = dataset
+            predictions_ckpt(split_dataset,args,ckpt_paths[ckpt_idx],ckpt_idx)
+    elif args.mode == "shapley":
+        args.return_probs = 'yes' #force return probs to yes for shapley
+        ckpt_path = ckpt_paths[0]
+        shap_ckpt(dataset,args,device=device,ckpt_path=ckpt_path)
     else:
-        save_name = 'summary.csv'
-    final_df.to_csv(os.path.join(args.save_dir, save_name))
+        raise NotImplementedError

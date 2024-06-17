@@ -84,6 +84,7 @@ parser.add_argument('--k', type=int, default=10, help='number of folds (default:
 parser.add_argument('--k_start', type=int, default=-1, help='start fold (default: -1, last fold)')
 parser.add_argument('--k_end', type=int, default=-1, help='end fold (default: -1, first fold)')
 parser.add_argument('--results_dir', default='./results', help='results directory (default: ./results)')
+parser.add_argument('--csv_path', default='./dataset_csv/tumor_vs_normal_dummy_clean.csv', help='csv file path')
 parser.add_argument('--split_dir', type=str, default=None, 
                     help='manually specify the set of splits to use, ' 
                     +'instead of infering from the task and label_frac argument (default: None)')
@@ -94,7 +95,7 @@ parser.add_argument('--opt', type=str, choices = ['adam', 'sgd'], default='adam'
 parser.add_argument('--drop_out', type=float, default=0.25, help='dropout')
 parser.add_argument('--bag_loss', type=str, choices=['svm', 'ce'], default='ce',
                      help='slide-level classification loss function (default: ce)')
-parser.add_argument('--model_type', type=str, choices=['clam_sb', 'clam_mb', 'mil'], default='clam_sb', 
+parser.add_argument('--model_type', type=str, choices=['clam_sb', 'clam_mb', 'mil','mlp'], default='clam_sb', 
                     help='type of model (default: clam_sb, clam w/ single attention branch)')
 parser.add_argument('--exp_code', type=str, help='experiment code for saving results')
 parser.add_argument('--weighted_sample', action='store_true', default=False, help='enable weighted sampling')
@@ -146,7 +147,9 @@ settings = {'num_splits': args.k,
             "use_drop_out": args.drop_out,
             'weighted_sample': args.weighted_sample,
             'opt': args.opt,
-            'modality' : args.modality}
+            'modality' : args.modality,
+            'csv_path': args.csv_path,
+            'data_root_dir': args.data_root_dir}
 
 if args.model_type in ['clam_sb', 'clam_mb']:
    settings.update({'bag_weight': args.bag_weight,
@@ -157,7 +160,7 @@ print('\nLoad Dataset')
 
 if args.task == 'task_1_tumor_vs_normal':
     args.n_classes=2
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+    dataset = Generic_MIL_Dataset(csv_path = args.csv_path,
                             data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
                             shuffle = False, 
                             seed = args.seed, 
@@ -168,7 +171,7 @@ if args.task == 'task_1_tumor_vs_normal':
 
 elif args.task == 'task_2_tumor_subtyping':
     args.n_classes=3
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_subtyping_dummy_clean.csv',
+    dataset = Generic_MIL_Dataset(csv_path = args.csv_path,
                             data_dir= os.path.join(args.data_root_dir, 'tumor_subtyping_resnet_features'),
                             shuffle = False, 
                             seed = args.seed, 
