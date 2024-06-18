@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 class MIL_fc(nn.Module):
     def __init__(self, size_arg = "small", dropout = 0., n_classes = 2, top_k=1,
-                 embed_dim=1024,modality=None,clinical_dim=0):
+                 embed_dim=1024,modality=None,clinical_dim=0,return_probs=False):
         super().__init__()
         assert n_classes == 2
         self.size_dict = {"small": [embed_dim, 512]}
@@ -32,7 +32,7 @@ class MIL_fc(nn.Module):
 
 
 class MIL_fc_mc(nn.Module):
-    def __init__(self, size_arg = "small", dropout = 0., n_classes = 2, top_k=1, embed_dim=1024,modality=None,clinical_dim=0):
+    def __init__(self, size_arg = "small", dropout = 0., n_classes = 2, top_k=1, embed_dim=1024,modality=None,clinical_dim=0,return_probs=False):
         super().__init__()
         assert n_classes > 2
         self.size_dict = {"small": [embed_dim, 512]}
