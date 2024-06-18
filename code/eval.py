@@ -44,8 +44,7 @@ parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal',  'tas
 parser.add_argument('--drop_out', type=float, default=0.25, help='dropout')
 parser.add_argument('--embed_dim', type=int, default=1090)
 parser.add_argument('--mode', type=str,choices=['eval','predict','shapley'] ,default='shapley', help='mode of evaluation')
-parser.add_argument('--positive_csv_path', type=str, help='csv path for positive class like marked for solar elastosis',default='dataset_csv/tumor_vs_normal_dummy_clean.csv')
-parser.add_argument('--negative_csv_path', type=str, help='csv path for positive class like mild for solar elastosis',default='dataset_csv/tumor_vs_normal_dummy_clean.csv')                         
+parser.add_argument('--csv_path', type=str, help='csv path for positive class like marked for solar elastosis',default='dataset_csv/tumor_vs_normal_dummy_clean.csv')
 parser.add_argument('--return_probs', type=str, help='model to return only softmax output',choices=['yes','no'],default='no')
 args = parser.parse_args()
 
@@ -78,7 +77,7 @@ print(settings)
 if args.task == 'task_1_tumor_vs_normal':
     if args.mode == 'shapley':
         args.n_classes=2
-        dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+        dataset = Generic_MIL_Dataset(csv_path = args.csv_path,#'dataset_csv/tumor_vs_normal_dummy_clean.csv',
                                 data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
                                 shuffle = False, 
                                 print_info = True,
@@ -87,7 +86,7 @@ if args.task == 'task_1_tumor_vs_normal':
                                 ignore=[])
     else:
         args.n_classes=2
-        dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
+        dataset = Generic_MIL_Dataset(csv_path = args.csv_path,#'dataset_csv/tumor_vs_normal_dummy_clean.csv',
                                       data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
                                       shuffle = False, 
                                       print_info = True,
@@ -98,7 +97,7 @@ if args.task == 'task_1_tumor_vs_normal':
 
 elif args.task == 'task_2_tumor_subtyping':
     args.n_classes=3
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_subtyping_dummy_clean.csv',
+    dataset = Generic_MIL_Dataset(csv_path = args.csv_path,#'dataset_csv/tumor_subtyping_dummy_clean.csv',
                             data_dir= os.path.join(args.data_root_dir, 'tumor_subtyping_resnet_features'),
                             shuffle = False, 
                             print_info = True,
