@@ -34,9 +34,14 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --drop_out 0.25 --early_stopping --lr 2e-
 --csv_path /home/tailab/data/gem_blgm/clinical_features/tumor_vs_normal_dummy_clean.csv --results_dir results/clinical_mm_only 
 --split_dir mildvmarkedtask_1_tumor_vs_normal_100/ --modality unimodal"
 
-4.MIL-Image ONLY (Baseline):
+4. MIL-Image ONLY (Baseline):
 CUDA_VISIBLE_DEVICES=0 python3 main.py --drop_out 0.25 --early_stopping --lr 2e-4 --k 10 --exp_code task_1_tumor_vs_normal_MIL_100 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type mlp --log_data --data_root_dir ~/data/gem_blgm/Resnet_features/ --embed_dim 59  --csv_path /home/taiblab/data/gem_blgm/concat_resnet_tab_features_mm/tumor_vs_normal_dummy_clean.csv --results_dir results/clinical_mm_only --split_dir mildvmarkedtask_1_tumor_vs_normal_100/ --modality unimodal
 
+5. Image only Bagging
+CUDA_VISIBLE_DEVICES=0 python3 bagging_main.py --drop_out 0.25 --early_stopping --lr 2e-4 --k 10 --exp_code task_1_tumor_vs_normal_CLAM_100 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type clam_sb --log_data --csv_path /home/tailab/se/data/mild_vs_absent.csv --data_root_dir /home/tailab/se/data/resnet_features_solarelastosis/tumor_subtyping_resnet_features  --embed_dim 1024  --modality unimodal --results_dir mild_vs_absent_bagging_only_images --split_dir mild_vs_absenttask_1_tumor_vs_normal_100
+
+6. Clinical Bagging
+CUDA_VISIBLE_DEVICES=0 python3 bagging_main.py --drop_out 0.25 --early_stopping --lr 2e-4 --k 10 --exp_code task_1_tumor_vs_normal_CLAM_100 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type clam_sb --log_data --csv_path /home/tailab/se/data/marked_vs_mild.csv --data_root_dir /home/tailab/se/data/three_ways_features --clinical_dim 3  --embed_dim 1024  --modality product_fusion --results_dir marked_vs_mild_bagging_dot_product --split_dir marked_vs_mildtask_1_tumor_vs_normal_100
 
 ### Evaluation
 
