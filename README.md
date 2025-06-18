@@ -225,7 +225,7 @@ CUDA_VISIBLE_DEVICES=0 python3 bagging_main.py \
 
 ------
 
-## 4. Evaluation
+### 3.2 Evaluation
 
 - **TCGA Melanoma Prediction**
 
@@ -260,7 +260,7 @@ CUDA_VISIBLE_DEVICES=0 python3 bagging_main.py \
 
 ------
 
-## 5. Docker Directory Structure
+## 4. Docker Directory Structure
 
 ```
 /home/tailab
