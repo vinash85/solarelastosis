@@ -120,7 +120,7 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py \
   --modality unimodal
 ```
 
-#### 3.1.4 Unimodal—Clinical High-Confidence Threshold
+#### 3.1.4 MultiModal—Clinical High-Confidence Threshold
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python3 baggingVarianceCutMain.py \
